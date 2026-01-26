@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from app.db.database import Base, engine
-from app.models import user, doctor
+from app.routes import user
+app = FastAPI()
 
-app = FastAPI(title="Smart Queue System")
 
 Base.metadata.create_all(bind=engine)
+app.include_router(user.router)
 
 @app.get("/")
-def root():
+def health():
     return {"message": "Backend is running"}
