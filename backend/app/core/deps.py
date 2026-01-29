@@ -27,3 +27,15 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="User not found")
 
     return user
+
+from typing import List
+def require_roles(allowed_roles: List[str]):
+    def role_checker(current_user=Depends(get_current_user)):
+        if current_user.role.lower() not in [r.lower() for r in allowed_roles]:
+            raise HTTPException(
+                status_code=403,
+                detail="You are not authorized to access this resource"
+
+            )
+        return current_user
+    return role_checker
