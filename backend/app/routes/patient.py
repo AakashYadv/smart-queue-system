@@ -31,3 +31,46 @@ def join_queue(
     db.commit()
     db.refresh(queue_entry)
     return queue_entry
+
+from sqlalchemy.orm import Session
+from app.models.queue import Queue
+from app.db.deps import get_db
+from app.core.deps import require_roles
+
+@router.get("/queue/status")
+def queue_status(
+    db: Session = Depends(get_db),
+    patient = Depends(require_roles(["patient"]))
+):
+    entry = db.query(Queue)\
+        .filter(
+            Queue.patient_id == patient.id,
+            Queue.status.in_(["waiting", "in_progress"])
+        )\
+        .order_by(Queue.created_at)\
+        .first()
+
+    if not entry:
+        return {"message": "You are not in any queue"}
+
+    waiting_list = db.query(Queue)\
+        .filter(
+            Queue.doctor_id == entry.doctor_id,
+            Queue.status == "waiting"
+        )\
+        .order_by(Queue.created_at)\
+        .all()
+
+    position = next(
+        (i + 1 for i, q in enumerate(waiting_list) if q.patient_id == patient.id),
+        None
+    )
+
+    avg_time = 10  # minutes
+    estimated_time = position * avg_time if position else 0
+
+    return {
+        "status": entry.status,
+        "position": position,
+        "estimated_wait_time_minutes": estimated_time
+    }
