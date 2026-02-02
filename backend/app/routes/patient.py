@@ -11,6 +11,7 @@ def patient_profile(
         "email": patient.email
     }
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.models.queue import Queue
 from app.schemas.queue import QueueCreate, QueueResponse
@@ -23,6 +24,19 @@ def join_queue(
     db: Session = Depends(get_db),
     patient = Depends(require_roles(["patient"]))
 ):
+    # 🔴 CHECK DUPLICATE
+    existing = db.query(Queue).filter(
+        Queue.patient_id == patient.id,
+        Queue.doctor_id == data.doctor_id,
+        Queue.status.in_(["waiting", "in_progress"])
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="You are already in the queue for this doctor"
+        )
+
     queue_entry = Queue(
         patient_id=patient.id,
         doctor_id=data.doctor_id
@@ -31,6 +45,7 @@ def join_queue(
     db.commit()
     db.refresh(queue_entry)
     return queue_entry
+
 
 from sqlalchemy.orm import Session
 from app.models.queue import Queue
@@ -74,3 +89,25 @@ def queue_status(
         "position": position,
         "estimated_wait_time_minutes": estimated_time
     }
+from fastapi import HTTPException
+
+@router.delete("/queue/cancel")
+def cancel_queue(
+    db: Session = Depends(get_db),
+    patient = Depends(require_roles(["patient"]))
+):
+    entry = db.query(Queue).filter(
+        Queue.patient_id == patient.id,
+        Queue.status == "waiting"
+    ).first()
+
+    if not entry:
+        raise HTTPException(
+            status_code=400,
+            detail="No cancellable queue entry found"
+        )
+
+    entry.status = "done"
+    db.commit()
+
+    return {"message": "Queue cancelled successfully"}
