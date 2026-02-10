@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from app.core.deps import require_roles
+from app.services.notification import send_notification
 
 router=APIRouter(prefix="/patient",tags=["Patient"])
 @router.get("/profile")
@@ -44,7 +45,12 @@ def join_queue(
     db.add(queue_entry)
     db.commit()
     db.refresh(queue_entry)
+    send_notification(
+    patient.email,
+    f"You have joined the queue for doctor ID {data.doctor_id}"
+)
     return queue_entry
+
 
 
 from sqlalchemy.orm import Session

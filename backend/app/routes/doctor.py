@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 from app.models.queue import Queue
 from app.db.deps import get_db
 from app.core.deps import require_roles
+from app.services.notification import send_notification
+from app.models.user import User
+
 
 router = APIRouter(prefix="/doctor", tags=["Doctor"])
 
@@ -39,6 +42,13 @@ def call_next_patient(
 
     next_patient.status = "in_progress"
     db.commit()
+    patient = db.query(User).filter(User.id == next_patient.patient_id).first()
+
+    send_notification(
+     patient.email,
+    "It is now your turn. Please proceed to the doctor's room."
+    )
+
 
     return {
         "message": "Next patient called",
