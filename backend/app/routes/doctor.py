@@ -85,3 +85,32 @@ def complete_consultation(
     performed_by="doctor"
 )
     return {"message": "Consultation completed"}
+
+@router.get("/doctors/performance")
+def doctor_performance(
+    db: Session = Depends(get_db),
+    admin = Depends(require_roles(["admin"]))
+):
+    doctors = db.query(User).filter(User.role == "doctor").all()
+
+    result = []
+    for doctor in doctors:
+        total = db.query(Queue).filter(
+            Queue.doctor_id == doctor.id
+        ).count()
+
+        completed = db.query(Queue).filter(
+            Queue.doctor_id == doctor.id,
+            Queue.status == "done"
+        ).count()
+
+        pending = total - completed
+
+        result.append({
+            "doctor": doctor.email,
+            "total_patients": total,
+            "completed": completed,
+            "pending": pending
+        })
+
+    return result

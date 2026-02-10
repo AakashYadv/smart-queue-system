@@ -70,3 +70,14 @@ def view_audit_logs(
     return db.query(AuditLog)\
         .order_by(AuditLog.timestamp.desc())\
         .all()
+
+@router.get("/queues/status")
+def queue_status_summary(
+    db: Session = Depends(get_db),
+    admin = Depends(require_roles(["admin"]))
+):
+    return {
+        "waiting": db.query(Queue).filter(Queue.status == "waiting").count(),
+        "in_progress": db.query(Queue).filter(Queue.status == "in_progress").count(),
+        "done": db.query(Queue).filter(Queue.status == "done").count()
+    }
