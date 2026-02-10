@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from app.core.deps import require_roles
 from app.services.notification import send_notification
+from app.models.audit_log import AuditLog
 
 router=APIRouter(prefix="/patient",tags=["Patient"])
 @router.get("/profile")
@@ -44,6 +45,16 @@ def join_queue(
     )
     db.add(queue_entry)
     db.commit()
+
+    from app.services.audit import log_event
+
+    log_event(
+        db,
+        queue_id=queue_entry.id,
+        action="joined",
+        performed_by="patient"
+    )
+
     db.refresh(queue_entry)
     send_notification(
     patient.email,
@@ -117,3 +128,16 @@ def cancel_queue(
     db.commit()
 
     return {"message": "Queue cancelled successfully"}
+
+@router.get("/queue/history")
+def patient_history(
+    db: Session = Depends(get_db),
+    patient = Depends(require_roles(["patient"]))
+):
+    logs = db.query(AuditLog)\
+        .join(Queue, Queue.id == AuditLog.queue_id)\
+        .filter(Queue.patient_id == patient.id)\
+        .order_by(AuditLog.timestamp.desc())\
+        .all()
+
+    return logs

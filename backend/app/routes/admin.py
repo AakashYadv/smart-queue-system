@@ -16,6 +16,7 @@ from app.db.deps import get_db
 from app.core.deps import require_roles
 from app.models.user import User
 from app.models.queue import Queue
+from app.models.audit_log import AuditLog
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -61,3 +62,11 @@ def admin_dashboard(
             for doc_id, count in doctor_load
         ]
     }
+@router.get("/audit-logs")
+def view_audit_logs(
+    db: Session = Depends(get_db),
+    admin = Depends(require_roles(["admin"]))
+):
+    return db.query(AuditLog)\
+        .order_by(AuditLog.timestamp.desc())\
+        .all()

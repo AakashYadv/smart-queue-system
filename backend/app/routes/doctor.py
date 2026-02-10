@@ -5,7 +5,7 @@ from app.db.deps import get_db
 from app.core.deps import require_roles
 from app.services.notification import send_notification
 from app.models.user import User
-
+from app.services.audit import log_event
 
 router = APIRouter(prefix="/doctor", tags=["Doctor"])
 
@@ -41,7 +41,14 @@ def call_next_patient(
         return {"message": "No patients in queue"}
 
     next_patient.status = "in_progress"
-    db.commit()
+    
+    log_event(
+    db=db,
+    queue_id=next_patient.id,
+    action="called",
+    performed_by="doctor"
+)
+
     patient = db.query(User).filter(User.id == next_patient.patient_id).first()
 
     send_notification(
@@ -71,5 +78,10 @@ def complete_consultation(
 
     entry.status = "done"
     db.commit()
-
+    log_event(
+    db=db,
+    queue_id=entry.id,
+    action="completed",
+    performed_by="doctor"
+)
     return {"message": "Consultation completed"}
