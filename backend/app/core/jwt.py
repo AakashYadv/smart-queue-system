@@ -3,7 +3,7 @@ from jose import jwt,JWTError
 
 SECRET_KEY = "supersecretkey"   # later move to env
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()

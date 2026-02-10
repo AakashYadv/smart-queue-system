@@ -1,21 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from app.models.queue import Queue
+from app.models.user import User
 from app.db.deps import get_db
 from app.core.deps import require_roles
 from app.services.notification import send_notification
-from app.models.user import User
 from app.services.audit import log_event
 
 router = APIRouter(prefix="/doctor", tags=["Doctor"])
 
 
+# -----------------------------
+# VIEW CURRENT QUEUE
+# -----------------------------
 @router.get("/queue")
 def view_queue(
     db: Session = Depends(get_db),
-    doctor = Depends(require_roles(["doctor"]))
+    doctor=Depends(require_roles(["doctor"]))
 ):
-    queue = db.query(Queue)\
+    return db.query(Queue)\
         .filter(
             Queue.doctor_id == doctor.id,
             Queue.status == "waiting"
@@ -23,11 +27,14 @@ def view_queue(
         .order_by(Queue.created_at)\
         .all()
 
-    return queue
+
+# -----------------------------
+# CALL NEXT PATIENT
+# -----------------------------
 @router.post("/queue/next")
 def call_next_patient(
     db: Session = Depends(get_db),
-    doctor = Depends(require_roles(["doctor"]))
+    doctor=Depends(require_roles(["doctor"]))
 ):
     next_patient = db.query(Queue)\
         .filter(
@@ -40,33 +47,41 @@ def call_next_patient(
     if not next_patient:
         return {"message": "No patients in queue"}
 
+    # ✅ Update status
     next_patient.status = "in_progress"
-    
-    log_event(
-    db=db,
-    queue_id=next_patient.id,
-    action="called",
-    performed_by="doctor"
-)
+    db.commit()
 
+    # ✅ Audit log
+    log_event(
+        db=db,
+        queue_id=next_patient.id,
+        action="called",
+        performed_by="doctor"
+    )
+
+    # ✅ Notify patient
     patient = db.query(User).filter(User.id == next_patient.patient_id).first()
 
     send_notification(
-     patient.email,
-    "It is now your turn. Please proceed to the doctor's room."
+        patient.email,
+        "It is now your turn. Please proceed to the doctor's room."
     )
-
 
     return {
         "message": "Next patient called",
         "queue_id": next_patient.id,
         "patient_id": next_patient.patient_id
     }
+
+
+# -----------------------------
+# COMPLETE CONSULTATION
+# -----------------------------
 @router.post("/queue/{queue_id}/complete")
 def complete_consultation(
     queue_id: int,
     db: Session = Depends(get_db),
-    doctor = Depends(require_roles(["doctor"]))
+    doctor=Depends(require_roles(["doctor"]))
 ):
     entry = db.query(Queue).filter(
         Queue.id == queue_id,
@@ -78,39 +93,28 @@ def complete_consultation(
 
     entry.status = "done"
     db.commit()
+
+    # ✅ Audit log
     log_event(
-    db=db,
-    queue_id=entry.id,
-    action="completed",
-    performed_by="doctor"
-)
+        db=db,
+        queue_id=entry.id,
+        action="completed",
+        performed_by="doctor"
+    )
+
     return {"message": "Consultation completed"}
-
-@router.get("/doctors/performance")
-def doctor_performance(
+# -----------------------------
+# DOCTOR QUEUE HISTORY
+# -----------------------------
+@router.get("/queue/history")
+def doctor_queue_history(
     db: Session = Depends(get_db),
-    admin = Depends(require_roles(["admin"]))
+    doctor=Depends(require_roles(["doctor"]))
 ):
-    doctors = db.query(User).filter(User.role == "doctor").all()
-
-    result = []
-    for doctor in doctors:
-        total = db.query(Queue).filter(
-            Queue.doctor_id == doctor.id
-        ).count()
-
-        completed = db.query(Queue).filter(
+    return db.query(Queue)\
+        .filter(
             Queue.doctor_id == doctor.id,
             Queue.status == "done"
-        ).count()
-
-        pending = total - completed
-
-        result.append({
-            "doctor": doctor.email,
-            "total_patients": total,
-            "completed": completed,
-            "pending": pending
-        })
-
-    return result
+        )\
+        .order_by(Queue.created_at.desc())\
+        .all()
