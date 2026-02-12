@@ -17,6 +17,8 @@ from app.core.deps import require_roles
 from app.models.user import User
 from app.models.queue import Queue
 from app.models.audit_log import AuditLog
+from app.models.user import User
+from app.models.queue import Queue
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -81,3 +83,30 @@ def queue_status_summary(
         "in_progress": db.query(Queue).filter(Queue.status == "in_progress").count(),
         "done": db.query(Queue).filter(Queue.status == "done").count()
     }
+@router.get("/doctors/performance")
+def doctors_performance(
+    db: Session = Depends(get_db),
+    admin = Depends(require_roles(["admin"]))
+):
+    doctors = db.query(User).filter(User.role == "doctor").all()
+
+    result = []
+
+    for doctor in doctors:
+        total = db.query(Queue).filter(
+            Queue.doctor_id == doctor.id
+        ).count()
+
+        completed = db.query(Queue).filter(
+            Queue.doctor_id == doctor.id,
+            Queue.status == "done"
+        ).count()
+
+        result.append({
+            "doctor_email": doctor.email,
+            "total_patients": total,
+            "completed": completed,
+            "pending": total - completed
+        })
+
+    return result
