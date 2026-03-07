@@ -103,7 +103,11 @@ def doctors_performance(
         ).count()
 
         result.append({
+            "doctor_id": doctor.id,
+            "doctor_name": doctor.name,
             "doctor_email": doctor.email,
+            "specialization": doctor.specialization or "General Physician",
+            "is_available": doctor.is_available if doctor.is_available is not None else True,
             "total_patients": total,
             "completed": completed,
             "pending": total - completed
